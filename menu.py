@@ -9,7 +9,7 @@ import os
 import nuke
 
 try:
-    from _repo_urls import GITHUB_REPO_URL, install_download_lines
+    from _beeble_repo_urls import GITHUB_REPO_URL, install_download_lines
 except Exception:
     GITHUB_REPO_URL = "https://github.com/JuusoKaari/nuke-beeble-ai-tools"
 

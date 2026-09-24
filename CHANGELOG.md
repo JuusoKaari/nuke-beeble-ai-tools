@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.1.1]
+
+- Fixed SwitchX failing to start when nuke-fal-ai-tools is installed in the same Nuke session
+
 ## [1.1.0]
 
 - Added explicit Alpha / Luminance mask-channel selection on SwitchX and SwitchX 2.0

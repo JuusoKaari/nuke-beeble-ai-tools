@@ -90,7 +90,7 @@ FORBIDDEN_ZIP_FILES = (
 
 # Helper-side modules that must import without Nuke.
 EXTRACT_IMPORT_MODULES = (
-    ("extract_repo_urls", os.path.join("nuke", "python", "_repo_urls.py")),
+    ("extract_repo_urls", os.path.join("nuke", "python", "_beeble_repo_urls.py")),
     ("extract_beeble_py_compat", os.path.join("nuke", "python", "beeble_py_compat.py")),
     ("extract_beeble_install_root", os.path.join("nuke", "python", "_beeble_install_root.py")),
 )

@@ -5,7 +5,7 @@ from __future__ import print_function
 import os
 
 from _beeble_install_root import discover_install_root
-from _repo_urls import install_download_lines
+from _beeble_repo_urls import install_download_lines
 
 INSTALL_ROOT_PLACEHOLDER = "__INSTALL_ROOT__"
 

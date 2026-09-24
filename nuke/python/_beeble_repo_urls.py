@@ -1,4 +1,6 @@
 # Purpose: Canonical GitHub URLs for nuke-beeble-ai-tools (install hints and docs).
+# Named _beeble_repo_urls so it does not collide with nuke-fal-ai-tools _repo_urls
+# when both plugins are on sys.path.
 # Resolves a download URL by probing releases/latest, then falling back to the repo
 # when GitHub has no published release (latest redirects to the empty /releases list).
 
