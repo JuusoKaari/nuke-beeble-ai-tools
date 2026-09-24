@@ -1,0 +1,69 @@
+# Purpose:
+# - Nuke Group node that runs Beeble SwitchX 2.0 via the Product API (custom alpha).
+# - Model switchx-2.0; keeps last_job_id for a future SwitchX Finish node.
+# - Delegates execute logic to beeble_switchx2_runner_v1.py.
+
+set cut_paste_input [stack 0]
+version 11.3 v6
+push $cut_paste_input
+Group {
+ name Beeble_SwitchX2_v1
+ selected true
+ xpos 0
+ ypos 0
+ addUserKnob {26 guide_info l "" T "Beeble SwitchX 2.0\nProduct API (model switchx-2.0) with custom alpha mask.\n\nConnect source video to source_video.\nConnect frame-by-frame alpha matte to alpha_mask (video).\nOptional: connect reference image to reference_image for style/target look.\nSet prompt on the node, then press Execute.\n\nCamera tracking (SwitchX 2.0): when enabled, the generated environment follows the source camera motion.\n\nRequires an organization-bound Beeble API key with the switchx product enabled.\nPowered by SwitchX"}
+ addUserKnob {1 prompt l Prompt}
+ prompt "Describe the desired output style, lighting, or background"
+ addUserKnob {4 max_resolution l "Max resolution" M {720 1080 ""}}
+ max_resolution 720
+ addUserKnob {4 mode l Mode M {standard fast ""}}
+ mode standard
+ addUserKnob {6 camera_tracking l "Camera tracking" t "SwitchX 2.0: when enabled, the generated environment follows the source camera motion. Turn off if you want a more locked-off / less motion-matched background." +STARTLINE}
+ camera_tracking true
+ addUserKnob {4 frame_range l "Input frame range" M {root current custom ""}}
+ frame_range root
+ addUserKnob {1 custom_start l "Custom start"}
+ custom_start "1"
+ addUserKnob {1 custom_end l "Custom end"}
+ custom_end "1"
+ addUserKnob {6 show_success_popup l "Show success popup" +STARTLINE}
+ show_success_popup true
+ addUserKnob {22 execute T "import beeble_runner_launcher\nbeeble_runner_launcher.execute_this_node()\n" +STARTLINE}
+ addUserKnob {20 endGroup n -1}
+ addUserKnob {1 python3_cmd l "Python 3 cmd" +INVISIBLE}
+ python3_cmd "py -3"
+ addUserKnob {1 helper_path l "Helper path" +INVISIBLE}
+ helper_path "__INSTALL_ROOT__/nuke/python/beeble_switchx2_helper.py"
+ addUserKnob {1 runner_path l "Runner path" +INVISIBLE}
+ runner_path "__INSTALL_ROOT__/nuke/python/beeble_switchx2_runner_v1.py"
+ addUserKnob {1 last_job_id l "Last job id" +INVISIBLE}
+ last_job_id ""
+ addUserKnob {1 BEEBLE_API_KEY +INVISIBLE}
+ BEEBLE_API_KEY "insert your secret key here or use env variable BEEBLE_API_KEY"
+}
+Input {
+ inputs 0
+ name source_video
+ xpos 0
+ ypos -51
+}
+Input {
+ inputs 0
+ name alpha_mask
+ xpos 188
+ ypos -51
+ number 1
+}
+Input {
+ inputs 0
+ name reference_image
+ xpos 376
+ ypos -51
+ number 2
+}
+Output {
+ name Output1
+ xpos 188
+ ypos 120
+}
+end_group

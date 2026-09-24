@@ -18,7 +18,11 @@ _POLL_TIMEOUT_SEC = 0.1
 
 _UPLOAD_RE = re.compile(r"Uploading", re.I)
 _START_RE = re.compile(r"Starting SwitchX", re.I)
-_POLL_RE = re.compile(r"status=(in_queue|processing|completed|failed)", re.I)
+# Legacy SwitchX uses completed/failed; Product API uses success/cancelled/credit_required.
+_POLL_RE = re.compile(
+    r"status=(in_queue|processing|completed|failed|success|cancelled|credit_required)",
+    re.I,
+)
 _PROGRESS_RE = re.compile(r"progress=(\d+)", re.I)
 _DOWNLOAD_RE = re.compile(r"Downloading output", re.I)
 _RETRY_RE = re.compile(r"WARNING:\s*Beeble request failed", re.I)

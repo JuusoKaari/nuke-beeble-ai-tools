@@ -1,6 +1,7 @@
 # Purpose:
 # - Shared Python 3 utilities for Beeble API helper scripts (stdlib only).
 # - HTTP JSON client, presigned uploads, downloads, and retry heuristics.
+# - Legacy SwitchX generation helpers plus Product API job helpers.
 
 from __future__ import annotations
 
@@ -8,6 +9,7 @@ import json
 import os
 import random
 import sys
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +17,10 @@ from typing import Any
 
 API_BASE = "https://api.beeble.ai"
 USER_AGENT = "nuke-beeble-switchx-helper"
+
+# Product API terminal statuses (poll until success or one of these).
+PRODUCT_TERMINAL_FAILURE_STATUSES = frozenset({"failed", "cancelled", "credit_required"})
+PRODUCT_SUCCESS_STATUS = "success"
 
 
 def configure_stdio_utf8() -> None:
@@ -85,12 +91,26 @@ def _read_response_body(resp) -> Any:
         return text
 
 
+def resolve_team_id(team_id: str | None = None) -> str | None:
+    """
+    Resolve X-Beeble-Team-Id for Product API calls.
+    Prefer an explicit value; otherwise use BEEBLE_TEAM_ID when set.
+    Returns None when unset so the header is omitted.
+    """
+    if team_id is not None:
+        text = str(team_id).strip()
+        return text or None
+    text = (os.environ.get("BEEBLE_TEAM_ID") or "").strip()
+    return text or None
+
+
 def api_request(
     method: str,
     path: str,
     api_key: str,
     body: dict | None = None,
     timeout: float = 120.0,
+    team_id: str | None = None,
 ) -> Any:
     url = path if path.startswith("http") else (API_BASE.rstrip("/") + "/" + path.lstrip("/"))
     headers = {
@@ -98,6 +118,10 @@ def api_request(
         "x-api-key": api_key,
         "Accept": "application/json",
     }
+    # Only attach when the caller passes a non-empty team id (Product API helpers
+    # should pass resolve_team_id()). Legacy SwitchX callers omit the header.
+    if team_id:
+        headers["X-Beeble-Team-Id"] = str(team_id).strip()
     data = None
     if body is not None:
         headers["Content-Type"] = "application/json"
@@ -161,8 +185,14 @@ def compute_retry_sleep_seconds(attempt: int, retry_base_seconds: float) -> floa
     return sleep_s * (0.75 + (0.5 * random.random()))
 
 
-def create_upload(api_key: str, filename: str) -> dict:
-    result = api_request("POST", "/v1/uploads", api_key, body={"filename": filename})
+def create_upload(api_key: str, filename: str, team_id: str | None = None) -> dict:
+    result = api_request(
+        "POST",
+        "/v1/uploads",
+        api_key,
+        body={"filename": filename},
+        team_id=team_id,
+    )
     if not isinstance(result, dict):
         raise BeebleApiError("Unexpected upload response: %s" % result)
     for key in ("upload_url", "beeble_uri"):
@@ -246,11 +276,16 @@ def upload_file_to_presigned_url(upload_url: str, file_path: str) -> None:
         ) from e
 
 
-def upload_local_file(api_key: str, file_path: str, verbose: bool = False) -> str:
+def upload_local_file(
+    api_key: str,
+    file_path: str,
+    verbose: bool = False,
+    team_id: str | None = None,
+) -> str:
     filename = os.path.basename(file_path)
     if verbose:
         safe_print("Uploading: %s" % file_path)
-    info = create_upload(api_key, filename)
+    info = create_upload(api_key, filename, team_id=team_id)
     upload_file_to_presigned_url(str(info["upload_url"]), file_path)
     beeble_uri = str(info["beeble_uri"])
     if verbose:
@@ -271,6 +306,65 @@ def get_switchx_job_status(api_key: str, job_id: str) -> dict:
     result = api_request("GET", "/v1/switchx/generations/%s" % job_id, api_key)
     if not isinstance(result, dict):
         raise BeebleApiError("Unexpected status response: %s" % result)
+    return result
+
+
+def generate_idempotency_key(prefix: str = "nuke-beeble") -> str:
+    """Unique idempotency key for each genuinely new Product API job."""
+    safe_prefix = (prefix or "nuke-beeble").strip() or "nuke-beeble"
+    return "%s-%s" % (safe_prefix, uuid.uuid4().hex)
+
+
+def create_product_job(
+    api_key: str,
+    product: str,
+    payload: dict,
+    team_id: str | None = None,
+) -> dict:
+    product_id = (product or "").strip()
+    if not product_id:
+        raise BeebleApiError("product is required")
+    result = api_request(
+        "POST",
+        "/v1/products/%s/jobs" % product_id,
+        api_key,
+        body=payload,
+        team_id=resolve_team_id(team_id),
+    )
+    if not isinstance(result, dict):
+        raise BeebleApiError("Unexpected product job response: %s" % result)
+    if not (result.get("id") or "").strip():
+        raise BeebleApiError("Product job response missing id: %s" % result)
+    return result
+
+
+def get_product_job(api_key: str, job_id: str, team_id: str | None = None) -> dict:
+    jid = (job_id or "").strip()
+    if not jid:
+        raise BeebleApiError("job_id is required")
+    result = api_request(
+        "GET",
+        "/v1/product-jobs/%s" % jid,
+        api_key,
+        team_id=resolve_team_id(team_id),
+    )
+    if not isinstance(result, dict):
+        raise BeebleApiError("Unexpected product job status response: %s" % result)
+    return result
+
+
+def list_product_models(api_key: str, product: str, team_id: str | None = None) -> dict:
+    product_id = (product or "").strip()
+    if not product_id:
+        raise BeebleApiError("product is required")
+    result = api_request(
+        "GET",
+        "/v1/products/%s/models" % product_id,
+        api_key,
+        team_id=resolve_team_id(team_id),
+    )
+    if not isinstance(result, dict):
+        raise BeebleApiError("Unexpected product models response: %s" % result)
     return result
 
 

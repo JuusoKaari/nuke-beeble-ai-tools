@@ -5,22 +5,19 @@ from __future__ import print_function
 import os
 
 from _beeble_install_root import discover_install_root
-from _repo_urls import GITHUB_RELEASES_URL, GITHUB_REPO_URL
+from _repo_urls import install_download_lines
 
 INSTALL_ROOT_PLACEHOLDER = "__INSTALL_ROOT__"
 
-_INSTALL_HINT = (
-    "\n\nDownload and install nuke-beeble-ai-tools:\n"
-    "  Latest release zip: %s\n"
-    "  Or clone: %s\n\n"
-    "Extract (or clone) to a stable folder, add that folder to NUKE_PATH, "
-    "then restart Nuke.\n"
-    "Full steps: docs/INSTALL.md in the install folder."
-) % (GITHUB_RELEASES_URL, GITHUB_REPO_URL)
-
 
 def install_hint():
-    return _INSTALL_HINT
+    return (
+        "\n\nDownload and install nuke-beeble-ai-tools:\n"
+        "%s\n\n"
+        "Extract (or clone) to a stable folder, add that folder to NUKE_PATH, "
+        "then restart Nuke.\n"
+        "Full steps: docs/INSTALL.md in the install folder."
+    ) % install_download_lines()
 
 
 def resolve_install_path(path):
@@ -45,15 +42,16 @@ def resolve_install_path(path):
 
 def _require_tool_path(nuke_module, raw_path, label):
     path = resolve_install_path((raw_path or "").strip())
+    hint = install_hint()
     if not path:
         nuke_module.message(
             "%s path is empty. Re-create the node from the beeble.ai menu.%s"
-            % (label, _INSTALL_HINT)
+            % (label, hint)
         )
         raise Exception("%s_path not set" % label.lower())
     if not os.path.isfile(path):
         nuke_module.message(
-            "Missing %s script:\n%s%s" % (label.lower(), path, _INSTALL_HINT)
+            "Missing %s script:\n%s%s" % (label.lower(), path, hint)
         )
         raise Exception("%s not found" % label.lower())
     return path

@@ -1,4 +1,6 @@
-# Purpose: Nuke menu entry for the Beeble SwitchX group node (Nodes toolbar + top menubar).
+# Purpose: Nuke menu entries for Beeble SwitchX (legacy) and SwitchX 2.0 group nodes.
+# Registers under Nodes toolbar and top menubar. Install hints probe GitHub releases,
+# then fall back to the repo page when no release exists.
 
 from __future__ import print_function
 
@@ -6,16 +8,22 @@ import os
 
 import nuke
 
-_GITHUB_RELEASES_URL = "https://github.com/JuusoKaari/nuke-beeble-ai-tools/releases/latest"
-_GITHUB_REPO_URL = "https://github.com/JuusoKaari/nuke-beeble-ai-tools"
+try:
+    from _repo_urls import GITHUB_REPO_URL, install_download_lines
+except Exception:
+    GITHUB_REPO_URL = "https://github.com/JuusoKaari/nuke-beeble-ai-tools"
 
-_INSTALL_HINT = (
-    "\n\nDownload and install nuke-beeble-ai-tools:\n"
-    "  Latest release zip: %s\n"
-    "  Or clone: %s\n\n"
-    "Add the nuke-beeble-ai-tools folder to NUKE_PATH, then restart Nuke.\n"
-    "Full steps: docs/INSTALL.md in the install folder."
-) % (_GITHUB_RELEASES_URL, _GITHUB_REPO_URL)
+    def install_download_lines():
+        return "  Repo: %s" % GITHUB_REPO_URL
+
+
+def _install_hint():
+    return (
+        "\n\nDownload and install nuke-beeble-ai-tools:\n"
+        "%s\n\n"
+        "Add the nuke-beeble-ai-tools folder to NUKE_PATH, then restart Nuke.\n"
+        "Full steps: docs/INSTALL.md in the install folder."
+    ) % install_download_lines()
 
 
 def _resolve_paths():
@@ -54,7 +62,7 @@ def _create_beeble_node(group_file, helper_py, runner_py):
     if not os.path.isfile(group_path):
         nuke.message(
             "Missing group file:\n%s\n\nResolved install root: %s\nNUKE_PATH: %s%s"
-            % (group_path, root or "<unknown>", os.environ.get("NUKE_PATH", ""), _INSTALL_HINT)
+            % (group_path, root or "<unknown>", os.environ.get("NUKE_PATH", ""), _install_hint())
         )
         raise Exception("group not found: %s" % group_file)
     node = nuke.createNode(group_path, inpanel=False)
@@ -79,22 +87,21 @@ def _make_creator(group_file, helper_py, runner_py):
     return _creator
 
 
-_nodes_beeble_menu = nuke.menu("Nodes").addMenu("beeble.ai")
-_nodes_beeble_menu.addCommand(
-    "SwitchX",
-    _make_creator(
-        "beeble_switchx_v1.nk",
-        "beeble_switchx_helper.py",
-        "beeble_switchx_runner_v1.py",
-    ),
+_SWITCHX_LEGACY = (
+    "beeble_switchx_v1.nk",
+    "beeble_switchx_helper.py",
+    "beeble_switchx_runner_v1.py",
+)
+_SWITCHX2 = (
+    "beeble_switchx2_v1.nk",
+    "beeble_switchx2_helper.py",
+    "beeble_switchx2_runner_v1.py",
 )
 
+_nodes_beeble_menu = nuke.menu("Nodes").addMenu("beeble.ai")
+_nodes_beeble_menu.addCommand("SwitchX", _make_creator(*_SWITCHX_LEGACY))
+_nodes_beeble_menu.addCommand("SwitchX 2.0", _make_creator(*_SWITCHX2))
+
 _top_beeble_menu = nuke.menu("Nuke").addMenu("beeble.ai")
-_top_beeble_menu.addCommand(
-    "SwitchX",
-    _make_creator(
-        "beeble_switchx_v1.nk",
-        "beeble_switchx_helper.py",
-        "beeble_switchx_runner_v1.py",
-    ),
-)
+_top_beeble_menu.addCommand("SwitchX", _make_creator(*_SWITCHX_LEGACY))
+_top_beeble_menu.addCommand("SwitchX 2.0", _make_creator(*_SWITCHX2))

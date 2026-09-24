@@ -9,7 +9,7 @@ Setup guide for **nuke-beeble-ai-tools**.
 | Item | Notes |
 |------|--------|
 | **Foundry Nuke** | Nuke 8.0+ (tested on 11.3v6). Group nodes; embedded Python 2.7 or 3.x |
-| **System Python 3** | Separate from Nuke - runs `beeble_switchx_helper.py` via subprocess |
+| **System Python 3** | Separate from Nuke - runs helpers via subprocess |
 | **ffmpeg + ffprobe** | On `PATH` for video prerender, validation, and Read frame-range probing |
 | **Beeble account** | API key from [Beeble developer docs](https://developer.beeble.ai/docs/authentication) |
 | **Internet** | Helper calls Beeble cloud APIs |
@@ -18,10 +18,10 @@ Setup guide for **nuke-beeble-ai-tools**.
 
 | Runtime | Version | What runs there |
 |---------|---------|-----------------|
-| **Nuke embedded** | 2.7 (classic) or 3.x (Nuke 13.2+) | `init.py`, `menu.py`, `beeble_switchx_runner_v1.py`, prerender utilities |
-| **System / shell** | Python 3 | `beeble_switchx_helper.py`, Beeble REST API calls |
+| **Nuke embedded** | 2.7 (classic) or 3.x (Nuke 13.2+) | `init.py`, `menu.py`, runners, prerender utilities |
+| **System / shell** | Python 3 | `beeble_switchx_helper.py`, `beeble_switchx2_helper.py`, Beeble REST API calls |
 
-The helper uses **stdlib only** - no `pip install` is required.
+Helpers use **stdlib only** - no `pip install` is required.
 
 The **Python 3 cmd** knob on the node (default `py -3`) points at the system interpreter, not Nuke's.
 
@@ -41,13 +41,19 @@ C:\Tools\nuke-beeble-ai-tools
 git clone https://github.com/JuusoKaari/nuke-beeble-ai-tools.git C:\Tools\nuke-beeble-ai-tools
 ```
 
+If a GitHub release zip exists, Nuke install hints prefer that URL; otherwise they fall back to the repo page.
+
 ## 2. Set your Beeble API key
 
 **Recommended:** set user environment variable `BEEBLE_API_KEY` to your secret key. The runner passes it to the helper via the subprocess environment (not the command line).
 
+**Legacy SwitchX** works with a Developer API key for `/v1/switchx/generations`.
+
+**SwitchX 2.0** uses the Product API and needs an **organization-bound** key with the `switchx` product enabled. Optional: set `BEEBLE_TEAM_ID` if your org uses internal teams (sent as `X-Beeble-Team-Id`).
+
 **Alternative:** paste the key into the **BEEBLE_API_KEY** knob on the node. That value is **saved into the `.nk` script** - never share or commit scripts that contain a real key.
 
-Get a key via [Beeble authentication docs](https://developer.beeble.ai/docs/authentication).
+Get a key via [Beeble authentication docs](https://developer.beeble.ai/docs/authentication) (legacy) or [enterprise / organization keys](https://developer.beeble.ai/docs/enterprise/authentication).
 
 ## 3. Add to `NUKE_PATH`
 
@@ -67,7 +73,9 @@ Both repos can coexist on `NUKE_PATH`. Each has its own `init.py`, `menu.py`, an
 
 Restart Nuke after changing `NUKE_PATH`.
 
-## 4. Use the SwitchX node
+## 4. Use the nodes
+
+### SwitchX (legacy)
 
 1. **Nodes -> beeble.ai -> SwitchX** (or **Nuke -> beeble.ai -> SwitchX**)
 2. Connect `source_video` and `alpha_mask` (both required)
@@ -76,17 +84,27 @@ Restart Nuke after changing `NUKE_PATH`.
 5. Set **Input frame range** when inputs need prerendering from a pipe
 6. Press **Execute**
 
+### SwitchX 2.0 (Product API)
+
+1. **Nodes -> beeble.ai -> SwitchX 2.0**
+2. Same inputs as legacy SwitchX
+3. Set **Camera tracking** if you want the generated environment to follow source camera motion
+4. Prefer **Mode = standard** if you may Finish the job later (Finish is not in this toolkit yet; the node stores `last_job_id`)
+5. Press **Execute**
+
 On success, a Read node is created in the main graph with the composited MP4.
 
 Temp prerenders go to `nuke_beeble_temp/` next to your saved `.nk` script; API downloads go to `nuke_beeble_output/`.
 
 ## Input limits (enforced before upload)
 
-The runner **cancels** if inputs violate Beeble SwitchX limits:
+The runner **cancels** if inputs violate the local SwitchX limits used by this toolkit:
 
 - Max **240 frames** per source and alpha video
 - Max **2,770,000 pixels** (width x height)
 - Source and alpha must have **matching frame count and resolution**
+
+These match the legacy SwitchX docs. SwitchX 2.0 live model schema may differ; confirm with `GET /v1/products/switchx/models` when you have an org key.
 
 `ffprobe` must be on `PATH` for validation. If it is missing, the run is cancelled with an error message.
 
@@ -98,11 +116,12 @@ The runner **cancels** if inputs violate Beeble SwitchX limits:
 | Node missing from menu | `NUKE_PATH` points at install root; restart Nuke |
 | Helper fails immediately | **Python 3 cmd** knob matches your launcher (`py -3`, `python3`, or full path) |
 | Validation errors | Frame count, resolution, ffprobe on PATH |
-| API auth errors | `BEEBLE_API_KEY` env var or node knob |
+| Legacy API auth errors | `BEEBLE_API_KEY` env var or node knob |
+| SwitchX 2.0 "organization-bound" / product errors | Use an org API key; confirm `switchx` is enabled; optional `BEEBLE_TEAM_ID` |
 | Prerender fails | ffmpeg on PATH; save the Nuke script first (temp dirs are next to the `.nk`) |
 
-See [Beeble API errors](https://developer.beeble.ai/docs/errors) for API-side failure details.
+See [Beeble API errors](https://developer.beeble.ai/docs/errors) and [enterprise errors](https://developer.beeble.ai/docs/enterprise/errors) for API-side failure details.
 
 ## Brand attribution
 
-Applications using the Beeble SwitchX API should include attribution. The SwitchX group node includes **Powered by SwitchX** in its guide text. See [Beeble brand attribution](https://developer.beeble.ai/docs/brand-attribution).
+Applications using the Beeble SwitchX API should include attribution. The group nodes include **Powered by SwitchX** in their guide text. See [Beeble brand attribution](https://developer.beeble.ai/docs/brand-attribution).
