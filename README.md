@@ -39,13 +39,30 @@ Local pre-upload checks still use the same frame/pixel caps as legacy SwitchX (2
 
 ## Node inputs (both nodes)
 
+Inputs are Nuke graph pipes. The runners prerender automatically when needed; you do not have to write intermediate files by hand.
+
 | Input | Required | Notes |
 |-------|----------|-------|
-| `source_video` | Yes | MP4/MOV |
-| `alpha_mask` | Yes | Frame-by-frame video matte, same length and resolution as source |
-| `reference_image` | No | Style/target still (PNG/JPEG/WebP); strongly recommended |
+| `source_video` | Yes | Any Nuke image/video pipe. Automatically prerendered to compatible video when needed. |
+| `alpha_mask` | Yes | Any Nuke matte pipe. **Mask channel** selects alpha or luminance; automatically normalized and prerendered. |
+| `reference_image` | No | Any Nuke image pipe. Automatically rendered to a compatible still when needed. |
 
 At least one of **prompt** or **reference_image** is required.
+
+### Mask channel
+
+Both SwitchX nodes expose **Mask channel** (default `alpha`):
+
+- **alpha** - use the input alpha channel, copy it into grayscale RGB (`R = G = B = alpha`) for the upload video
+- **luminance** - convert visible RGB to grayscale and copy that into R/G/B
+
+Alpha masks always go through this normalization so the selected channel is what Beeble receives.
+
+### When prerender is skipped
+
+- **source_video**: a Read pointing at a single compatible MP4/MOV may be used directly
+- **reference_image**: a Read pointing at a PNG/JPEG may be used directly
+- **alpha_mask**: always normalized and prerendered (no direct MP4/MOV pass-through)
 
 ## License
 

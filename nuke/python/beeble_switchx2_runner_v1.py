@@ -1,6 +1,7 @@
 # Purpose:
 # - Runner script for the Nuke Group node `Beeble_SwitchX2_v1` (executes inside Nuke).
-# - Accepts source video, custom alpha mask video, and optional reference image inputs.
+# - Accepts source video, custom alpha mask, and optional reference image graph inputs.
+# - Alpha mask is always normalized via Mask channel (alpha or luminance) then prerendered.
 # - Validates inputs, calls external Python 3 helper `beeble_switchx2_helper.py`
 #   (Product API switchx / switchx-2.0), stores last_job_id, spawns a result Read node.
 #
@@ -83,6 +84,10 @@ def _will_use_read_video_fast_path(nuke_module, src_node, frame):
 
 
 def _validate_planned_prerenders(nuke_module, nodes_and_labels, frame, first, last):
+    """
+    nodes_and_labels entries are (node, label) or (node, label, allow_video_fast_path).
+    When allow_video_fast_path is False (alpha_mask), always validate the planned range.
+    """
     planned = int(last) - int(first) + 1
     if planned < 1:
         switchx2_validate.abort_with_message(
@@ -90,8 +95,13 @@ def _validate_planned_prerenders(nuke_module, nodes_and_labels, frame, first, la
             "Invalid frame range: end must be >= start.",
         )
 
-    for src_node, label in nodes_and_labels:
-        if _will_use_read_video_fast_path(nuke_module, src_node, frame):
+    for item in nodes_and_labels:
+        if len(item) == 3:
+            src_node, label, allow_fast = item
+        else:
+            src_node, label = item
+            allow_fast = True
+        if allow_fast and _will_use_read_video_fast_path(nuke_module, src_node, frame):
             continue
         err = switchx2_validate.validate_planned_frame_count(planned, label)
         if err:
@@ -154,13 +164,15 @@ def main():
     _validate_planned_prerenders(
         nuke,
         [
-            (src_video_node, "Source video"),
-            (alpha_node, "Alpha mask"),
+            (src_video_node, "Source video", True),
+            (alpha_node, "Alpha mask", False),
         ],
         frame,
         default_first,
         default_last,
     )
+
+    mask_channel = prerender.read_mask_channel_knob(g)
 
     prompt = (g.knob("prompt").value() or "").strip()
     has_ref_input = ref_node is not None
@@ -209,7 +221,7 @@ def main():
         switchx2_validate.abort_with_message(nuke, "Failed to prepare source video:\n%s" % str(e))
 
     try:
-        alpha_path = prerender.prepare_video_input_path(
+        alpha_path = prerender.prepare_mask_video_input_path(
             nuke_module=nuke,
             src_node=alpha_node,
             frame=frame,
@@ -217,6 +229,7 @@ def main():
             default_last=default_last,
             run_dir=temp_dir,
             base_name="alpha_mask",
+            mask_channel=mask_channel,
         )
     except Exception as e:
         switchx2_validate.abort_with_message(nuke, "Failed to prepare alpha mask:\n%s" % str(e))

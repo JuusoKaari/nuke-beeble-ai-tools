@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.1.0]
+
+- Added explicit Alpha / Luminance mask-channel selection on SwitchX and SwitchX 2.0
+- Alpha masks are normalized to grayscale RGB before Beeble upload
+- Clarified automatic Nuke graph prerender behavior in README and INSTALL
+
+## [1.0.0]
+
 Initial public release packaging for the Beeble SwitchX toolkit for Foundry Nuke.
 
 ### Included nodes (2)

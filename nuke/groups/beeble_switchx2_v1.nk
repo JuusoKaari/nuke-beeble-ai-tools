@@ -11,7 +11,7 @@ Group {
  selected true
  xpos 0
  ypos 0
- addUserKnob {26 guide_info l "" T "Beeble SwitchX 2.0\nProduct API (model switchx-2.0) with custom alpha mask.\n\nConnect source video to source_video.\nConnect frame-by-frame alpha matte to alpha_mask (video).\nOptional: connect reference image to reference_image for style/target look.\nSet prompt on the node, then press Execute.\n\nCamera tracking (SwitchX 2.0): when enabled, the generated environment follows the source camera motion.\n\nRequires an organization-bound Beeble API key with the switchx product enabled.\nPowered by SwitchX"}
+ addUserKnob {26 guide_info l "" T "Beeble SwitchX 2.0\nProduct API (model switchx-2.0) with custom alpha mask.\n\nConnect any Nuke image/video pipe to source_video.\nConnect any Nuke matte pipe to alpha_mask.\nOptional: connect any image pipe to reference_image for style/target look.\nSet Mask channel (alpha or luminance), prompt, then press Execute.\n\nCamera tracking (SwitchX 2.0): when enabled, the generated environment follows the source camera motion.\n\nRequires an organization-bound Beeble API key with the switchx product enabled.\nPowered by SwitchX"}
  addUserKnob {1 prompt l Prompt}
  prompt "Describe the desired output style, lighting, or background"
  addUserKnob {4 max_resolution l "Max resolution" M {720 1080 ""}}
@@ -26,6 +26,8 @@ Group {
  custom_start "1"
  addUserKnob {1 custom_end l "Custom end"}
  custom_end "1"
+ addUserKnob {4 mask_channel l "Mask channel" t "Choose which channel is used as the Beeble matte. Alpha copies the input alpha channel into grayscale RGB. Luminance converts visible RGB into a grayscale matte." M {alpha luminance ""}}
+ mask_channel alpha
  addUserKnob {6 show_success_popup l "Show success popup" +STARTLINE}
  show_success_popup true
  addUserKnob {22 execute T "import beeble_runner_launcher\nbeeble_runner_launcher.execute_this_node()\n" +STARTLINE}

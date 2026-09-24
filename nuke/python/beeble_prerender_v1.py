@@ -1,6 +1,7 @@
 # Purpose:
 # - Compatibility wrapper for shared Nuke prerender utilities used by Beeble runner scripts.
-# - Delegates to beeble_prerender_core_v1, beeble_prerender_video_v1, and beeble_progress_v1.
+# - Delegates to beeble_prerender_core_v1, beeble_prerender_video_v1,
+#   beeble_prerender_mask_v1, and beeble_progress_v1.
 
 from __future__ import print_function
 
@@ -30,6 +31,13 @@ from beeble_prerender_core_v1 import (
 
 from beeble_prerender_video_v1 import render_video_from_node
 
+from beeble_prerender_mask_v1 import (
+    build_mask_normalize_node,
+    normalize_mask_channel,
+    prepare_mask_video_input_path,
+    read_mask_channel_knob,
+)
+
 from beeble_progress_v1 import BeebleProgressCancelled, run_helper_subprocess
 
 
@@ -38,6 +46,8 @@ def prepare_video_input_path(nuke_module, src_node, frame, default_first, defaul
     Return a video file path for any upstream node.
     - Read pointing at a single MP4/MOV file: resolves and returns it (no re-render).
     - Read with other format, or non-Read: renders a temp mp4 under `run_dir` for `default_first..default_last`.
+
+    Do not use this for alpha_mask; use prepare_mask_video_input_path so Mask channel is applied.
     """
     import os
 

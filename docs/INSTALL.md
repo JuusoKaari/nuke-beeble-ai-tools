@@ -89,16 +89,17 @@ Restart Nuke after changing `NUKE_PATH`.
 ### SwitchX (legacy)
 
 1. **Nodes -> beeble.ai -> SwitchX** (or **Nuke -> beeble.ai -> SwitchX**)
-2. Connect `source_video` and `alpha_mask` (both required)
-3. Optionally connect `reference_image`
+2. Connect any Nuke image/video pipe to `source_video` and any matte pipe to `alpha_mask` (both required)
+3. Optionally connect any image pipe to `reference_image`
 4. Enter a **prompt** (or rely on reference image alone)
-5. Set **Input frame range** when inputs need prerendering from a pipe
-6. Press **Execute**
+5. Set **Mask channel** (`alpha` or `luminance`; default `alpha`)
+6. Set **Input frame range** when inputs need prerendering from a pipe
+7. Press **Execute**
 
 ### SwitchX 2.0 (Product API)
 
 1. **Nodes -> beeble.ai -> SwitchX 2.0**
-2. Same inputs as legacy SwitchX
+2. Same inputs and **Mask channel** as legacy SwitchX
 3. Set **Camera tracking** if you want the generated environment to follow source camera motion
 4. Prefer **Mode = standard** if you may Finish the job later (Finish is not in this toolkit yet; the node stores `last_job_id`)
 5. Press **Execute**
@@ -106,6 +107,18 @@ Restart Nuke after changing `NUKE_PATH`.
 On success, a Read node is created in the main graph with the composited MP4.
 
 Temp prerenders go to `nuke_beeble_temp/` next to your saved `.nk` script; API downloads go to `nuke_beeble_output/`.
+
+### Input pipes and prerender
+
+| Input | Required | Notes |
+|-------|----------|-------|
+| `source_video` | Yes | Any Nuke image/video pipe. Automatically prerendered to compatible video when needed. |
+| `alpha_mask` | Yes | Any Nuke matte pipe. Mask channel selects alpha or luminance; automatically normalized and prerendered. |
+| `reference_image` | No | Any Nuke image pipe. Automatically rendered to a compatible still when needed. |
+
+- Compatible **source_video** Reads (single MP4/MOV) may bypass prerendering.
+- Compatible **reference_image** Reads (PNG/JPEG) may be used directly.
+- **alpha_mask** always goes through mask normalization so the selected **Mask channel** is sent correctly (no direct video pass-through).
 
 ## Input limits (enforced before upload)
 
