@@ -33,15 +33,26 @@ Pick a permanent install location, for example:
 C:\Tools\nuke-beeble-ai-tools
 ```
 
-`NUKE_PATH` must point at the folder that contains `init.py`, `menu.py`, and `nuke/` (the install root).
+`NUKE_PATH` must point at the folder that contains `init.py`, `menu.py`, and `nuke/` (the install root). Do not point at the inner `nuke/` folder.
 
-### Clone with Git
+### Option A: Download release zip (recommended)
+
+1. Open the [latest release](https://github.com/JuusoKaari/nuke-beeble-ai-tools/releases/latest).
+2. Download `nuke-beeble-ai-tools-vX.Y.Z.zip` (asset name matches the release tag).
+3. Extract the zip. It contains a single top-level folder `nuke-beeble-ai-tools/`.
+4. Move or rename that folder to your install path, e.g. `C:\Tools\nuke-beeble-ai-tools`.
+
+After extraction, `C:\Tools\nuke-beeble-ai-tools\init.py` should exist.
+
+Nuke install hints prefer the latest release URL when a published tag exists; otherwise they fall back to the repo page.
+
+### Option B: Clone with Git
+
+Use this if you prefer `git pull` for updates.
 
 ```powershell
 git clone https://github.com/JuusoKaari/nuke-beeble-ai-tools.git C:\Tools\nuke-beeble-ai-tools
 ```
-
-If a GitHub release zip exists, Nuke install hints prefer that URL; otherwise they fall back to the repo page.
 
 ## 2. Set your Beeble API key
 
@@ -121,6 +132,23 @@ These match the legacy SwitchX docs. SwitchX 2.0 live model schema may differ; c
 | Prerender fails | ffmpeg on PATH; save the Nuke script first (temp dirs are next to the `.nk`) |
 
 See [Beeble API errors](https://developer.beeble.ai/docs/errors) and [enterprise errors](https://developer.beeble.ai/docs/enterprise/errors) for API-side failure details.
+
+## Updating
+
+### Zip install
+
+1. Download the new release zip from [Releases](https://github.com/JuusoKaari/nuke-beeble-ai-tools/releases/latest).
+2. Extract over your existing install folder, or extract to a new folder and update `NUKE_PATH`.
+3. Restart Nuke. Recreate SwitchX / SwitchX 2.0 nodes from the menu if baked group graphs need a refresh.
+
+### Git clone
+
+```powershell
+cd C:\Tools\nuke-beeble-ai-tools
+git pull
+```
+
+Restart Nuke afterward.
 
 ## Brand attribution
 

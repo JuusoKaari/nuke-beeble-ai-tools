@@ -11,13 +11,14 @@ Nuke plugin for [Beeble SwitchX](https://developer.beeble.ai/docs) video composi
 
 ## Quick start
 
-1. Clone or download this repo to a stable folder, e.g. `C:\Tools\nuke-beeble-ai-tools`
-2. Add **this repo's root** to `NUKE_PATH` (separate from nuke-fal-ai-tools if you use both)
-3. Set environment variable `BEEBLE_API_KEY`
-4. Restart Nuke
-5. Create a node via **Nodes -> beeble.ai -> SwitchX** or **SwitchX 2.0**
+1. Download the [latest release](https://github.com/JuusoKaari/nuke-beeble-ai-tools/releases/latest) or `git clone`.
+2. Extract (or clone) to a permanent folder. The release zip contains a single top-level `nuke-beeble-ai-tools/` folder.
+3. Add **that folder** (the one with `init.py`) to `NUKE_PATH` (separate from nuke-fal-ai-tools if you use both).
+4. Set environment variable `BEEBLE_API_KEY`.
+5. Restart Nuke.
+6. Create a node via **Nodes -> beeble.ai -> SwitchX** or **SwitchX 2.0**.
 
-See [docs/INSTALL.md](docs/INSTALL.md) for full setup steps.
+See [docs/INSTALL.md](docs/INSTALL.md) for full setup steps. Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Two SwitchX nodes
 
@@ -30,9 +31,9 @@ SwitchX 2.0 needs an **organization-bound** API key with the `switchx` product e
 
 ### SwitchX 2.0 controls
 
-- **Camera tracking** — when enabled, the generated environment follows the source camera motion (SwitchX 2.0-specific).
-- **Mode** — `standard` (default) or `fast`. A later Finish workflow needs a successful **standard** parent job ID (`dap_…`), which this node stores on `last_job_id`. Finish itself is not implemented in this pass.
-- **Max resolution** — `720` or `1080` (Product API examples use 720; higher resolutions for Finish are documented separately).
+- **Camera tracking** - when enabled, the generated environment follows the source camera motion (SwitchX 2.0-specific).
+- **Mode** - `standard` (default) or `fast`. A later Finish workflow needs a successful **standard** parent job ID (`dap_...`), which this node stores on `last_job_id`. Finish itself is not implemented in this pass.
+- **Max resolution** - `720` or `1080` (Product API examples use 720; higher resolutions for Finish are documented separately).
 
 Local pre-upload checks still use the same frame/pixel caps as legacy SwitchX (240 frames, 2,770,000 pixels). Live `input_schema` for `switchx-2.0` may differ; fetch `GET /v1/products/switchx/models` with an org key to confirm.
 
@@ -49,3 +50,8 @@ At least one of **prompt** or **reference_image** is required.
 ## License
 
 See [LICENSE](LICENSE).
+
+## Links
+
+- [Latest release](https://github.com/JuusoKaari/nuke-beeble-ai-tools/releases/latest)
+- [Beeble developer docs](https://developer.beeble.ai/docs)

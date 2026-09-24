@@ -1,0 +1,40 @@
+# Purpose: Run the same unit tests as CI, then build a clean install zip and publish a GitHub Release when a v* tag is pushed.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests
+
+      - name: Build release zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF#refs/tags/}"
+          ARCHIVE="nuke-beeble-ai-tools-${VERSION}.zip"
+          python3 .github/scripts/pack_release.py --version "${VERSION}" --output "dist/${ARCHIVE}"
+          echo "ARCHIVE_PATH=dist/${ARCHIVE}" >> "${GITHUB_ENV}"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARCHIVE_PATH }}
+          generate_release_notes: true

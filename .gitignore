@@ -33,5 +33,14 @@ credentials.yml
 id_rsa
 id_ed25519
 
+# Local Execute output
+nuke_beeble_output/
+nuke_beeble_temp/
+
+# Release ZIP output (local dry pack / CI artifact)
+dist/
+*.zip
+
 # Cursor
 .cursorignore
+.cursor/
