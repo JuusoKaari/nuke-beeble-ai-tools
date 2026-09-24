@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.1.2]
+
+- SwitchX 2.0 explains when Beeble refuses a developer API key and requires an organization-bound key
+
 ## [1.1.1]
 
 - Fixed SwitchX failing to start when nuke-fal-ai-tools is installed in the same Nuke session

@@ -111,6 +111,29 @@ def _validate_planned_prerenders(nuke_module, nodes_and_labels, frame, first, la
             )
 
 
+def helper_failure_message(returncode, stdout_lines):
+    """Nuke dialog text when the SwitchX 2.0 helper exits non-zero."""
+    text = "\n".join(stdout_lines or [])
+    if "organization-bound api key" in text.lower():
+        return (
+            "Beeble SwitchX 2.0 needs an organization-bound API key.\n\n"
+            "Beeble accepted the uploads, then refused to start the job:\n"
+            "\"This endpoint requires an organization-bound API key.\"\n\n"
+            "SwitchX 2.0 uses the Product API. Set BEEBLE_API_KEY to an "
+            "organization API key with the switchx product enabled. Use the "
+            "environment variable, or this node's BEEBLE_API_KEY knob. "
+            "Restart Nuke after changing the environment variable.\n\n"
+            "Organization keys:\n"
+            "https://developer.beeble.ai/docs/enterprise/authentication\n\n"
+            "Legacy SwitchX still works with a developer API key."
+        )
+    return (
+        "Beeble SwitchX 2.0 helper failed (exit %d). "
+        "Check the Script Editor output for details."
+        % returncode
+    )
+
+
 def _parse_helper_result(stdout_lines):
     """Return the last JSON object with ok=True from helper stdout, or None."""
     result = None
@@ -306,8 +329,7 @@ def main():
     if returncode != 0:
         switchx2_validate.abort_with_message(
             nuke,
-            "Beeble SwitchX 2.0 helper failed (exit %d). Check the Script Editor output for details."
-            % returncode,
+            helper_failure_message(returncode, stdout_lines),
         )
 
     result = _parse_helper_result(stdout_lines)

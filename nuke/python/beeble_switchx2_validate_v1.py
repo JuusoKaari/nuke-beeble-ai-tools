@@ -2,7 +2,7 @@
 # - Validate Beeble SwitchX 2.0 video inputs before Product API calls (runs inside Nuke).
 # - Reuses the same local limits as legacy SwitchX until a live model input_schema
 #   can confirm different frame/resolution caps for switchx-2.0.
-# - Aborts the run when validation fails (caller shows nuke.message and raises).
+# - Aborts the run when a check or helper call fails (caller shows nuke.message and raises).
 
 from __future__ import print_function
 
@@ -21,4 +21,4 @@ validate_switchx_pair = _legacy.validate_switchx_pair
 
 def abort_with_message(nuke_module, message):
     nuke_module.message(message)
-    raise Exception("Beeble SwitchX 2.0 input validation failed")
+    raise Exception(message)
