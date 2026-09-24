@@ -1,0 +1,654 @@
+# Purpose:
+# - Core shared Python 2.7 utilities for Nuke Group-node runners to accept *any* upstream input pipe.
+# - If the input is a suitable `Read` node with a valid format (PNG/JPG for images, MP4/MOV for video),
+#   returns its file/pattern directly (no re-render).
+# - Otherwise, pre-renders a still image or image sequence to a writable temp folder (`nuke_beeble_temp`) and returns that path/pattern.
+# - `make_run_dirs()` also creates a paired output folder (`nuke_beeble_output`) for Beeble API results.
+# - `require_saved_nuke_script()` blocks runners when the script has no saved path on disk.
+# - Temp/output folders are always created next to the saved .nk script; no home/temp fallbacks.
+# - `group_scope()` resets to root, enters a Group, and always returns to root afterward.
+#
+# Notes:
+# - Must be Python 2.7 compatible (runs inside Nuke).
+# - Video rendering lives in `nuke_prerender_video_v1.py` to keep modules small.
+
+from __future__ import print_function
+
+import os
+import time
+
+try:
+    from contextlib import contextmanager
+except ImportError:
+    contextmanager = None
+
+
+def ensure_dir(path):
+    if path and (not os.path.isdir(path)):
+        try:
+            os.makedirs(path)
+        except Exception:
+            pass
+
+
+def norm_slashes(p):
+    return (p or "").replace("\\", "/")
+
+
+def current_group_context(nuke_module):
+    """Return the Group node for the active DAG context, or None at root."""
+    try:
+        return nuke_module.thisGroup()
+    except Exception:
+        return None
+
+
+def reset_to_root_graph(nuke_module):
+    """Return to the root DAG after accidental nested group.begin() leaks."""
+    for _ in range(64):
+        if current_group_context(nuke_module) is None:
+            break
+        try:
+            nuke_module.endGroup()
+        except Exception:
+            break
+
+
+if contextmanager is not None:
+
+    @contextmanager
+    def group_scope(nuke_module, group):
+        """
+        Enter a Group DAG context from root and always return to root afterward.
+        Use for any in-group node lookup or temporary in-group writes.
+        """
+        reset_to_root_graph(nuke_module)
+        group.begin()
+        try:
+            yield group
+        finally:
+            try:
+                group.end()
+            except Exception:
+                pass
+            reset_to_root_graph(nuke_module)
+
+else:
+
+    class group_scope(object):
+        """Py2 fallback when contextlib is unavailable."""
+
+        def __init__(self, nuke_module, group):
+            self._nuke = nuke_module
+            self._group = group
+
+        def __enter__(self):
+            reset_to_root_graph(self._nuke)
+            self._group.begin()
+            return self._group
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            try:
+                self._group.end()
+            except Exception:
+                pass
+            reset_to_root_graph(self._nuke)
+            return False
+
+
+def require_rendered_file(out_path, context="Render"):
+    """
+    Raise if `out_path` was not written or is empty.
+    Nuke execute() can succeed while a broken graph writes nothing.
+    """
+    out_path = os.path.abspath(out_path)
+    if not os.path.isfile(out_path):
+        raise Exception(
+            "%s failed: output file was not created:\n%s"
+            % (context, norm_slashes(out_path))
+        )
+    try:
+        if os.path.getsize(out_path) <= 0:
+            raise Exception(
+                "%s failed: output file is empty:\n%s"
+                % (context, norm_slashes(out_path))
+            )
+    except OSError as exc:
+        raise Exception(
+            "%s failed: could not read output file:\n%s\n(%s)"
+            % (context, norm_slashes(out_path), exc)
+        )
+    return out_path
+
+
+class UnsavedNukeScriptError(Exception):
+    """Raised when beeble.ai runners need a saved .nk path on disk."""
+
+
+class ScriptOutputDirError(Exception):
+    """Raised when temp/output folders cannot be created next to the saved .nk script."""
+
+    def __init__(self, script_dir, leaf_dir_name):
+        self.script_dir = script_dir
+        self.leaf_dir_name = leaf_dir_name
+        Exception.__init__(self, script_output_dir_not_writable_message(script_dir, leaf_dir_name))
+
+
+def unsaved_nuke_script_message(action="running beeble.ai nodes"):
+    return (
+        "This Nuke script is not saved yet.\n\n"
+        "Please save the script before %s.\n"
+        "beeble.ai temp and output folders are created next to the saved .nk file."
+        % action
+    )
+
+
+def script_output_dir_not_writable_message(script_dir, leaf_dir_name):
+    target = os.path.join(script_dir, leaf_dir_name)
+    return (
+        "Could not create the beeble.ai folder next to this Nuke script.\n\n"
+        "Script folder:\n%s\n\n"
+        "Expected folder:\n%s\n\n"
+        "Check that the drive is available and you have write permission, then try again."
+        % (script_dir, target)
+    )
+
+
+def _clean_nuke_path(path):
+    p = (path or "").strip()
+    if p.lower().startswith("file://"):
+        p = p[7:]
+    return p.strip()
+
+
+def _path_to_existing_dir(path):
+    """
+    Normalize a Nuke script path or directory path to an absolute existing directory.
+    Returns an empty string when the path cannot be resolved.
+    """
+    p = _clean_nuke_path(path)
+    if not p:
+        return ""
+    try:
+        if os.path.isfile(p):
+            return os.path.dirname(os.path.abspath(p))
+        if os.path.isdir(p):
+            return os.path.abspath(p)
+    except Exception:
+        return ""
+    return ""
+
+
+def _nuke_script_path_candidates(nuke_module):
+    """Return saved script file paths from Nuke APIs, in preference order."""
+    paths = []
+
+    try:
+        root_name = _clean_nuke_path(nuke_module.root().name())
+    except Exception:
+        root_name = ""
+    if root_name:
+        paths.append(root_name)
+
+    try:
+        script_name = _clean_nuke_path(nuke_module.scriptName())
+    except Exception:
+        script_name = ""
+    if script_name and script_name not in paths:
+        paths.append(script_name)
+
+    return paths
+
+
+def _nuke_script_dir_candidates(nuke_module):
+    """
+    Return absolute script directories from Nuke APIs, in preference order.
+    `root().name()` is preferred over `script_directory()` because the latter can be empty
+    or occasionally return the `.nk` file path instead of its parent folder.
+    """
+    dirs = []
+    seen = set()
+
+    def _add_dir(path):
+        d = _path_to_existing_dir(path)
+        if not d:
+            return
+        key = os.path.normcase(d)
+        if key in seen:
+            return
+        seen.add(key)
+        dirs.append(d)
+
+    for script_path in _nuke_script_path_candidates(nuke_module):
+        _add_dir(script_path)
+
+    try:
+        sd = _clean_nuke_path(nuke_module.script_directory())
+    except Exception:
+        sd = ""
+    if sd:
+        _add_dir(sd)
+
+    return dirs
+
+
+def is_nuke_script_saved(nuke_module):
+    """True when the root script has a saved path that exists on disk."""
+    for script_path in _nuke_script_path_candidates(nuke_module):
+        try:
+            if os.path.isfile(script_path):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def require_saved_nuke_script(nuke_module, action="running beeble.ai nodes"):
+    """Abort when the Nuke script is unsaved; temp/output dirs need a script location."""
+    if is_nuke_script_saved(nuke_module):
+        return
+    raise UnsavedNukeScriptError(action)
+
+
+def is_read_node(n):
+    try:
+        return (n is not None) and (n.Class() == "Read")
+    except Exception:
+        return False
+
+
+def looks_like_sequence_pattern(pat):
+    s = (pat or "").strip()
+    return ("#" in s) or ("%" in s and "d" in s)
+
+
+def _get_ext(path_or_pattern):
+    """Return lowercase extension (no dot) from path or sequence pattern."""
+    try:
+        ext = os.path.splitext((path_or_pattern or "").strip())[1]
+        return (ext or "").lstrip(".").lower()
+    except Exception:
+        return ""
+
+
+# JPEG intermediate frames for video prerender (fast Write, high quality before H.264).
+_JPEG_QUALITY = 0.95
+
+
+def _apply_write_output_settings(write_node, path_or_pattern):
+    """Configure a temporary Write node from the output path or sequence pattern."""
+    ext = _get_ext(path_or_pattern) or "png"
+    try:
+        if "file_type" in write_node.knobs():
+            write_node["file_type"].setValue(ext)
+    except Exception:
+        pass
+    try:
+        if "channels" in write_node.knobs():
+            write_node["channels"].setValue("rgb")
+    except Exception:
+        pass
+    if ext in ("jpg", "jpeg"):
+        try:
+            if "_jpeg_quality" in write_node.knobs():
+                write_node["_jpeg_quality"].setValue(_JPEG_QUALITY)
+        except Exception:
+            pass
+
+
+def _is_valid_image_extension(path_or_pattern):
+    """True if extension is png, jpg, or jpeg (for still/sequence Read fast-path)."""
+    return _get_ext(path_or_pattern) in ("png", "jpg", "jpeg")
+
+
+def _is_valid_video_extension(path_or_pattern):
+    """True if extension is mp4 or mov (for video Read fast-path)."""
+    return _get_ext(path_or_pattern) in ("mp4", "mov")
+
+
+def split_cmd(cmd):
+    cmd = (cmd or "").strip()
+    if not cmd:
+        return []
+    try:
+        import shlex
+
+        return shlex.split(cmd)
+    except Exception:
+        return cmd.split()
+
+
+def _can_write_dir(path):
+    try:
+        ensure_dir(path)
+        test_path = os.path.join(path, ".__nuke_ai_gen_write_test")
+        f = open(test_path, "wb")
+        try:
+            f.write(b"x")
+        finally:
+            try:
+                f.close()
+            except Exception:
+                pass
+        try:
+            os.remove(test_path)
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+
+def _show_nuke_message(nuke_module, message):
+    try:
+        nuke_module.message(message)
+    except Exception:
+        pass
+
+
+def pick_writable_temp_dir(nuke_module, leaf_dir_name, env_subdir_name=None):
+    """
+    Return `<script_dir>/<leaf_dir_name>` for the saved Nuke script.
+    Raises UnsavedNukeScriptError or ScriptOutputDirError when the folder cannot be used.
+    """
+    del env_subdir_name  # kept for backward compatibility; no alternate locations are used.
+
+    script_dirs = _nuke_script_dir_candidates(nuke_module)
+    if not script_dirs:
+        _show_nuke_message(nuke_module, unsaved_nuke_script_message())
+        raise UnsavedNukeScriptError("running beeble.ai nodes")
+
+    for sd in script_dirs:
+        target = os.path.join(sd, leaf_dir_name)
+        if _can_write_dir(target):
+            return target
+
+    exc = ScriptOutputDirError(script_dirs[0], leaf_dir_name)
+    _show_nuke_message(nuke_module, str(exc))
+    raise exc
+
+
+def make_run_dir(nuke_module, prefix, leaf_dir_name="nuke_beeble_temp", env_subdir_name="nuke_beeble_temp"):
+    base = pick_writable_temp_dir(nuke_module, leaf_dir_name=leaf_dir_name, env_subdir_name=env_subdir_name)
+    ensure_dir(base)
+    ts = time.strftime("%Y%m%d_%H%M%S") + ("_%03d" % (int(time.time() * 1000) % 1000))
+    run_dir = os.path.join(base, "%s_%s" % (prefix, ts))
+    ensure_dir(run_dir)
+    return run_dir, ts
+
+
+def make_run_dirs(
+    nuke_module,
+    prefix,
+    temp_leaf_dir_name="nuke_beeble_temp",
+    temp_env_subdir_name="nuke_beeble_temp",
+    output_leaf_dir_name="nuke_beeble_output",
+    output_env_subdir_name="nuke_beeble_output",
+    group_node=None,
+):
+    """
+    Create paired run folders sharing the same timestamp suffix:
+    - temp_dir under nuke_beeble_temp (prerenders / scratch)
+    - out_dir under nuke_beeble_output (Beeble API downloads / final outputs)
+
+    When group_node is given, its name is included so parallel executes on
+    multiple Group instances do not share the same folder.
+    """
+    ts = time.strftime("%Y%m%d_%H%M%S") + ("_%03d" % (int(time.time() * 1000) % 1000))
+    group_token = ""
+    if group_node is not None:
+        try:
+            safe_name = "".join(
+                (c if (c.isalnum() or c in ("_", "-")) else "_")
+                for c in (group_node.name() or "group")
+            )
+            group_token = "_%s_%d" % (safe_name[:40], id(group_node) % 10000)
+        except Exception:
+            group_token = "_group_%d" % (id(group_node) % 10000)
+    sub = "%s%s_%s" % (prefix, group_token, ts)
+    temp_base = pick_writable_temp_dir(
+        nuke_module, leaf_dir_name=temp_leaf_dir_name, env_subdir_name=temp_env_subdir_name
+    )
+    out_base = pick_writable_temp_dir(
+        nuke_module, leaf_dir_name=output_leaf_dir_name, env_subdir_name=output_env_subdir_name
+    )
+    ensure_dir(temp_base)
+    ensure_dir(out_base)
+    temp_dir = os.path.join(temp_base, sub)
+    out_dir = os.path.join(out_base, sub)
+    ensure_dir(temp_dir)
+    ensure_dir(out_dir)
+    return temp_dir, out_dir, ts
+
+
+def resolve_read_file_at_frame(nuke_module, read_node, frame):
+    try:
+        return nuke_module.filename(read_node, int(frame))
+    except Exception:
+        try:
+            return (read_node.knob("file").value() or "").strip()
+        except Exception:
+            return ""
+
+
+def render_still_from_node(nuke_module, src_node, out_path, frame):
+    """
+    Render a single frame from any node to `out_path` by creating a temporary Write node.
+    The source node must live on the root graph (use render_still_inside_group for in-group nodes).
+    """
+    out_path = os.path.abspath(out_path)
+    ensure_dir(os.path.dirname(out_path))
+
+    nuke_module.root().begin()
+    w = None
+    try:
+        w = nuke_module.nodes.Write()
+        w.setInput(0, src_node)
+        try:
+            w["file"].setValue(norm_slashes(out_path))
+        except Exception:
+            w.knob("file").setValue(norm_slashes(out_path))
+        try:
+            if "file_type" in w.knobs():
+                w["file_type"].setValue(os.path.splitext(out_path)[1].lstrip(".").lower() or "png")
+        except Exception:
+            pass
+        try:
+            if "channels" in w.knobs():
+                w["channels"].setValue("rgb")
+        except Exception:
+            pass
+        nuke_module.execute(w, int(frame), int(frame))
+    finally:
+        try:
+            if w is not None:
+                nuke_module.delete(w)
+        except Exception:
+            pass
+        nuke_module.endGroup()
+
+    return require_rendered_file(out_path, "Render still")
+
+
+def render_still_inside_group(nuke_module, group, src_node, out_path, frame):
+    """
+    Render a single frame from a node inside a Group via a temporary internal Write.
+    Caller must already be inside group.begin().
+    """
+    out_path = os.path.abspath(out_path)
+    ensure_dir(os.path.dirname(out_path))
+
+    w = None
+    try:
+        w = nuke_module.nodes.Write()
+        w.setInput(0, src_node)
+        try:
+            w["file"].setValue(norm_slashes(out_path))
+        except Exception:
+            w.knob("file").setValue(norm_slashes(out_path))
+        try:
+            if "file_type" in w.knobs():
+                w["file_type"].setValue(os.path.splitext(out_path)[1].lstrip(".").lower() or "png")
+        except Exception:
+            pass
+        try:
+            if "channels" in w.knobs():
+                w["channels"].setValue("rgb")
+        except Exception:
+            pass
+        nuke_module.execute(w, int(frame), int(frame))
+    finally:
+        try:
+            if w is not None:
+                nuke_module.delete(w)
+        except Exception:
+            pass
+
+    return require_rendered_file(out_path, "Render still (in group)")
+
+
+def render_still_inside_group_with_crop(nuke_module, src_node, out_path, frame, box):
+    """
+    Render a single frame from `src_node` cropped to `box` (x, y, r, t).
+    Creates temporary in-group Crop and Write nodes, then deletes them.
+    Caller must already be inside group.begin().
+    """
+    out_path = os.path.abspath(out_path)
+    ensure_dir(os.path.dirname(out_path))
+
+    crop = None
+    w = None
+    try:
+        crop = nuke_module.nodes.Crop()
+        crop.setInput(0, src_node)
+        try:
+            crop["box"].setValue(float(box[0]), float(box[1]), float(box[2]), float(box[3]))
+        except Exception:
+            crop.knob("box").setValue(
+                [float(box[0]), float(box[1]), float(box[2]), float(box[3])]
+            )
+        try:
+            crop["reformat"].setValue(True)
+        except Exception:
+            pass
+        w = nuke_module.nodes.Write()
+        w.setInput(0, crop)
+        try:
+            w["file"].setValue(norm_slashes(out_path))
+        except Exception:
+            w.knob("file").setValue(norm_slashes(out_path))
+        try:
+            if "file_type" in w.knobs():
+                w["file_type"].setValue(os.path.splitext(out_path)[1].lstrip(".").lower() or "png")
+        except Exception:
+            pass
+        try:
+            if "channels" in w.knobs():
+                w["channels"].setValue("rgb")
+        except Exception:
+            pass
+        nuke_module.execute(w, int(frame), int(frame))
+    finally:
+        try:
+            if w is not None:
+                nuke_module.delete(w)
+        except Exception:
+            pass
+        try:
+            if crop is not None:
+                nuke_module.delete(crop)
+        except Exception:
+            pass
+
+    return require_rendered_file(out_path, "Render still (ROI crop)")
+
+
+def render_sequence_from_node(nuke_module, src_node, out_pattern, first, last):
+    """
+    Render an image sequence from any node to `out_pattern` (should contain %0Nd or ####).
+    """
+    out_pattern = os.path.abspath(out_pattern)
+    ensure_dir(os.path.dirname(out_pattern))
+
+    nuke_module.root().begin()
+    w = None
+    try:
+        w = nuke_module.nodes.Write()
+        w.setInput(0, src_node)
+        try:
+            w["file"].setValue(norm_slashes(out_pattern))
+        except Exception:
+            w.knob("file").setValue(norm_slashes(out_pattern))
+        _apply_write_output_settings(w, out_pattern)
+        nuke_module.execute(w, int(first), int(last))
+    finally:
+        try:
+            if w is not None:
+                nuke_module.delete(w)
+        except Exception:
+            pass
+        nuke_module.endGroup()
+
+    return out_pattern
+
+
+def prepare_still_input_path(nuke_module, src_node, frame, run_dir, base_name):
+    """
+    Return a single still image path for any upstream node.
+    - Read with PNG/JPG: resolves to the file at `frame` (no re-render).
+    - Read with other format, or non-Read: renders a single PNG at `frame` under `run_dir`.
+    """
+    if is_read_node(src_node):
+        p = resolve_read_file_at_frame(nuke_module, src_node, frame)
+        if p and os.path.isfile(p) and _is_valid_image_extension(p):
+            return p
+        if p and os.path.isfile(p):
+            pass  # wrong format, fall through to prerender
+        else:
+            raise Exception("Resolved Read file not found: %s" % (p or "<empty>"))
+
+    out_path = os.path.join(run_dir, "%s.png" % base_name)
+    return render_still_from_node(nuke_module, src_node, out_path, frame)
+
+
+def prepare_sequence_input_pattern(nuke_module, src_node, default_first, default_last, run_dir, base_name, pad=4):
+    """
+    Return `(pattern, first, last)` for any upstream node.
+    - Read with sequence pattern and PNG/JPG extension: returns Read.file and Read's first/last (no re-render).
+    - Otherwise: renders a PNG sequence under `run_dir` and returns that pattern.
+    """
+    if is_read_node(src_node):
+        try:
+            pat = (src_node.knob("file").value() or "").strip()
+        except Exception:
+            pat = ""
+        if looks_like_sequence_pattern(pat) and _is_valid_image_extension(pat):
+            try:
+                first = int(src_node.knob("first").value())
+                last = int(src_node.knob("last").value())
+            except Exception:
+                first = int(default_first)
+                last = int(default_last)
+            return pat, first, last
+
+    first = int(default_first)
+    last = int(default_last)
+    if last < first:
+        first, last = last, first
+
+    pattern = os.path.join(run_dir, ("%s_%%0%dd.png" % (base_name, int(pad))))
+    return render_sequence_from_node(nuke_module, src_node, pattern, first, last), first, last
+
+
+def helper_subprocess_env(base_env=None):
+    """
+    Environment for spawning Python 3 Beeble helpers from Nuke.
+    On Windows, default console encoding (cp1252) cannot print Unicode helper output reliably.
+    """
+    env = (base_env or os.environ).copy()
+    if "PYTHONUTF8" not in env:
+        env["PYTHONUTF8"] = "1"
+    if "PYTHONIOENCODING" not in env:
+        env["PYTHONIOENCODING"] = "utf-8:replace"
+    return env
+
