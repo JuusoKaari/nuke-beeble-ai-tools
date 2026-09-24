@@ -7,6 +7,31 @@ __pycache__/
 .env
 .env.*
 !.env.example
+*.env
+.envrc
+
+# API keys and credential dumps
+*api_key*
+*api-key*
+*apikey*
+*API_KEY*
+*API-KEY*
+*APIKEY*
+BEEBLE_API_KEY*
+secrets.json
+secrets.yaml
+secrets.yml
+secrets.txt
+secret.json
+credentials.json
+credentials.yaml
+credentials.yml
+*.pem
+*.p12
+*.pfx
+*.key
+id_rsa
+id_ed25519
 
 # Cursor
 .cursorignore
