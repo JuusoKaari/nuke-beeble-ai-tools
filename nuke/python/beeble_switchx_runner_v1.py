@@ -19,6 +19,7 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
+import beeble_billing_messages
 import beeble_install_help
 import beeble_runner_launcher
 
@@ -26,6 +27,18 @@ import beeble_prerender_v1 as prerender
 import beeble_read_video_frames_v1 as video_frames
 import beeble_spawn_read_position_v1 as spawn_pos
 import beeble_switchx_validate_v1 as switchx_validate
+
+
+def helper_failure_message(returncode, stdout_lines):
+    """Nuke dialog text when the SwitchX helper exits non-zero."""
+    text = "\n".join(stdout_lines or [])
+    billing = beeble_billing_messages.billing_failure_dialog(text)
+    if billing:
+        return billing
+    return (
+        "Beeble SwitchX helper failed (exit %d). Check the Script Editor output for details."
+        % returncode
+    )
 
 
 def _norm_slashes(p):
@@ -252,7 +265,7 @@ def main():
         env.update({"BEEBLE_API_KEY": api_knob})
 
     try:
-        returncode, _stdout_lines = prerender.run_helper_subprocess(
+        returncode, stdout_lines = prerender.run_helper_subprocess(
             args,
             env=env,
             title="Beeble SwitchX",
@@ -263,7 +276,7 @@ def main():
     if returncode != 0:
         switchx_validate.abort_with_message(
             nuke,
-            "Beeble SwitchX helper failed (exit %d). Check the Script Editor output for details." % returncode,
+            helper_failure_message(returncode, stdout_lines),
         )
 
     xpos = int(g.xpos())

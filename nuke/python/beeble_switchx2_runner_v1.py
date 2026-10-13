@@ -20,6 +20,7 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
+import beeble_billing_messages
 import beeble_install_help
 import beeble_runner_launcher
 
@@ -114,6 +115,9 @@ def _validate_planned_prerenders(nuke_module, nodes_and_labels, frame, first, la
 def helper_failure_message(returncode, stdout_lines):
     """Nuke dialog text when the SwitchX 2.0 helper exits non-zero."""
     text = "\n".join(stdout_lines or [])
+    billing = beeble_billing_messages.billing_failure_dialog(text)
+    if billing:
+        return billing
     if "organization-bound api key" in text.lower():
         return (
             "Beeble SwitchX 2.0 needs an organization-bound API key.\n\n"

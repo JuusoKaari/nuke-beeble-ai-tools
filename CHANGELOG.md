@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- SwitchX and SwitchX 2.0 say when Beeble refused the job because credits are used up
+
 ## [1.1.2]
 
 - SwitchX 2.0 explains when Beeble refuses a developer API key and requires an organization-bound key

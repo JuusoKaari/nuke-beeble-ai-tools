@@ -173,6 +173,12 @@ def should_retry_beeble_error(exc: BaseException) -> bool:
 
 
 def format_beeble_error_summary(exc: BaseException) -> str:
+    # Local import: billing dialogs stay importable from Nuke's Python 2.7 runners.
+    from beeble_billing_messages import billing_summary_for_exception
+
+    billing = billing_summary_for_exception(exc)
+    if billing:
+        return billing
     body = getattr(exc, "body", None)
     if body is not None:
         return _format_error_body(body)
